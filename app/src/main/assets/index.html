@@ -1,0 +1,60 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>아그리바</title>
+<style>*{box-sizing:border-box}body{margin:0;background:#f4f7f3;color:#19382c;font:16px system-ui,sans-serif}header{background:#103a2a;color:#fff;padding:16px;display:flex;align-items:center;gap:12px;font-weight:800}svg{width:38px;height:38px}main{max-width:760px;margin:auto;padding:16px 16px 90px}h1,h2,p{margin:0 0 10px}.hero,article{padding:20px;border-radius:20px;margin-bottom:14px}.hero{background:#174b38;color:#fff}article{background:white;border:1px solid #e0e8df}.meta,small{color:#526b5d}.hero small{color:#d8ebcf}nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#fff;border-top:1px solid #dce6dd;padding:5px;z-index:1}button,input,select{font:inherit}button{border:0;border-radius:10px;padding:10px 12px;min-height:46px;background:#ddecce;color:#143c2e;font-weight:750}nav button{flex:1;padding:6px 2px;background:white;font-size:13px}nav button[aria-current]{background:#ddecce}.row{border-top:1px solid #e0e8df;padding:11px 0;display:flex;justify-content:space-between;align-items:center;gap:8px;overflow-wrap:anywhere}.row button{flex:none}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:16px}.stats div{background:#fff;border:1px solid #e0e8df;border-radius:12px;padding:9px;min-width:0;overflow-wrap:anywhere}.stats strong{display:block}dialog{width:min(94vw,460px);border:0;border-radius:20px;padding:20px;color:#19382c}dialog::backdrop{background:#0007}label{display:grid;gap:4px;margin-bottom:10px}input,select{padding:9px;border:1px solid #a8bdad;border-radius:8px;width:100%;min-height:45px}body.big{font-size:19px}</style>
+<header><svg viewBox="0 0 108 108" aria-hidden="true"><rect width="108" height="108" rx="24" fill="#1a503a"/><path fill="#fff3d9" d="M48 20H61L90 86H74L57 49Q33 53 24 62Z M18 86Q35 61 63 53Q45 65 35 86Z M45 86Q54 66 65 60L56 86Z"/></svg><div>AGRIVA<br><small style="color:#d8ebcf">아그리바 농업경영관리</small></div></header>
+<main id="app"></main><nav id="nav"></nav><dialog id="dialog"><h2 id="title"></h2><form id="form"><div id="fields"></div><p id="error" role="alert"></p><button type="submit">저장</button> <button type="button" id="cancel">취소</button></form></dialog>
+<script>
+const $=id=>document.getElementById(id), day=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul'}).format(new Date()), key='agriva-v1', id=()=>Date.now().toString(36)+Math.random().toString(36).slice(2), won=n=>n.toLocaleString('ko-KR')+'원';
+const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let data={plots:[{id:'p1',name:'1번 하우스',crop:'방울토마토',season:'가을 작기'}],work:[],task:[{id:'t1',plot:'p1',name:'관수 상태 확인',day,done:false}],money:[],big:false,applied:false};
+try{data=JSON.parse(localStorage.getItem(key))||data}catch{}
+const pages={home:'오늘',work:'일지',money:'장부',info:'농업정보',farm:'내 농장'};
+let page='home',mode,report='',filter='';
+const plot=p=>data.plots.find(e=>e.id===p);
+const button=(label,action,v='')=>'<button type="button" data-action="'+action+'" data-value="'+esc(v)+'">'+esc(label)+'</button>';
+const row=(title,sub,end='')=>'<div class="row"><div><strong>'+esc(title)+'</strong><br><small>'+esc(sub)+'</small></div>'+end+'</div>';
+const card=(title,body)=>'<article><h2>'+title+'</h2>'+body+'</article>';
+const amount=e=>e.amount-e.fee-e.shipping;
+function totals(entries){return ['income','expense','pending'].map(t=>entries.filter(e=>e.type===t).reduce((n,e)=>n+amount(e),0));}
+function save(){try{localStorage.setItem(key,JSON.stringify(data));}catch{alert('기기 저장이 불가능합니다. 현재 화면에서만 유지됩니다.');}render();}
+function render(){
+ document.body.classList.toggle('big',data.big);
+ $('nav').innerHTML=Object.entries(pages).map(([k,v])=>'<button type="button" data-action="page" data-value="'+k+'" '+(page===k?'aria-current="page"':'')+'>'+v+'</button>').join('');
+ const [income,expense,pending]=totals(data.money), stats='<div class="stats">'+[['실수령',income],['지출',expense],['미수금',pending]].map(([l,v])=>'<div><small>'+l+'</small><strong>'+won(v)+'</strong></div>').join('')+'</div>';
+ const tasks=data.task.filter(t=>t.day===day);
+ const names={income:'수입',expense:'지출',pending:'미수금'};
+ const views={
+ home:'<section class="hero"><small>'+day+'</small><h1>농장의 오늘</h1><p>오늘 남은 작업 '+tasks.filter(t=>!t.done).length+'건</p>'+button('작업 기록하기','open','work')+'</section>'+stats+card('오늘 할 일',tasks.map(t=>row(t.name,plot(t.plot)?.name,button(t.done?'완료 취소':'완료','done',t.id))).join('')+button('할 일 추가','open','task')),
+ work:card('영농일지',button('작업 추가','open','work')+'<p><label>필지<select id="workfilter">'+options(filter)+'</select></label></p>'+([...data.work].reverse().filter(e=>!filter||e.plot===filter).map(e=>row(e.name,e.day+' · '+plot(e.plot)?.name+' · '+e.kind+(e.qty?' · '+e.qty+' '+e.unit:''))).join('')||'<p>아직 기록이 없습니다.</p>')+'<h3>예정 작업</h3>'+data.task.filter(t=>t.day>day).map(t=>row(t.name,t.day+' · '+plot(t.plot)?.name)).join('')),
+ money:stats+card('거래 내역',button('거래 추가','open','money')+([...data.money].reverse().map(e=>row(e.name,e.day+' · '+names[e.type]+' · '+won(amount(e))+(e.paid?' · 입금 '+e.paid:''),e.type==='pending'?button('입금 확인','receive',e.id):'')).join('')||'<p>아직 거래가 없습니다.</p>'))+card('필지별 경영 리포트','<label>필지<select id="report">'+options(report)+'</select></label>'+reportRows()),
+ info:card('예시 농업정보','<p class="meta">데모 데이터로 실제 예보, 시세, 공고와 다릅니다.</p>'+row('필지 날씨','맑음 · 18°C · 강수 확률 10%')+row('방울토마토 도매 시세','가락시장 · 특등급 · 5kg · 24,800원')+row('시설원예 환경개선 지원','예시 공고 · 신청서 및 경영체 등록확인서',button(data.applied?'신청 완료 취소':'신청 완료 표시','apply'))),
+ farm:card('농장과 필지',data.plots.map(p=>row(p.name,p.crop+' · '+p.season)).join('')+button('필지 추가','open','plot'))+card('화면 설정',button(data.big?'기본 글씨':'큰 글씨','big')+'<p class="meta">기록은 이 기기에 저장됩니다.</p>')
+ };
+ $('app').innerHTML=views[page];
+}
+function options(active,all=true){return (all?'<option value="">전체 필지</option>':'')+data.plots.map(p=>'<option value="'+esc(p.id)+'" '+(p.id===active?'selected':'')+'>'+esc(p.name)+'</option>').join('');}
+function reportRows(){const entries=data.money.filter(e=>!report||e.plot===report), seasons=[...new Set(data.plots.map(p=>p.season).concat(entries.map(e=>e.season)))];return seasons.map(s=>{const [a,b,c]=totals(entries.filter(e=>e.season===s));return row(s,'실수령 '+won(a)+' · 지출 '+won(b)+' · 미수금 '+won(c)+' · 차액 '+won(a-b));}).join('');}
+const label=(l,x)=>'<label>'+l+x+'</label>', input=(n,x='')=>'<input name="'+n+'" required maxlength="100" '+x+'>', select=(n,opts)=>'<select name="'+n+'">'+opts.map(([v,t])=>'<option value="'+v+'">'+t+'</option>').join('')+'</select>', pf=()=>label('필지','<select name="plot">'+options('',false)+'</select>'), df=()=>label('날짜',input('day','type="date" value="'+day+'"')), numeric=(n,required=false)=>'<input type="number" name="'+n+'" min="0" max="9999999999" step="1" inputmode="numeric" '+(required?'required':'')+'>';
+let receiving='';
+function open(kind){
+ mode=kind;$('error').textContent='';
+ const name=label('제목',input('name'));
+ const fields={task:['할 일 추가',name+pf()+df()], work:['작업 기록',name+pf()+df()+label('구분',select('kind',[['재배','재배'],['수확','수확'],['출하','출하']]))+label('수량',numeric('qty'))+label('단위',select('unit',[['kg','kg'],['상자','상자'],['개','개']]))+label('새 작업 지출 (원)',numeric('cost'))], money:['거래 추가',name+pf()+df()+label('구분',select('type',[['income','받은 수입'],['expense','지출'],['pending','받을 돈']]))+label('금액 (원)',numeric('amount',true))+label('수수료 (원)',numeric('fee'))+label('운송비 (원)',numeric('shipping'))],plot:['필지 추가',label('필지 이름',input('name'))+label('작물',input('crop'))+label('작기',input('season'))],receive:['입금 확인',df()]};
+ $('title').textContent=fields[kind][0];$('fields').innerHTML=fields[kind][1];$('dialog').showModal();
+}
+$('cancel').onclick=()=>$('dialog').close();
+$('form').onsubmit=e=>{
+ e.preventDefault();const v=Object.fromEntries(new FormData(e.currentTarget));if(v.name!==undefined&&!v.name.trim()){ $('error').textContent='이름을 입력하세요.';return;}
+ if(mode==='receive'){const x=data.money.find(e=>e.id===receiving);x.type='income';x.paid=v.day;}
+ else{
+  v.id=id();v.season=v.season||plot(v.plot)?.season;
+  if(mode==='task')v.done=false;
+  if(mode==='money'){v.amount=Number(v.amount);v.fee=v.type==='expense'?0:Number(v.fee);v.shipping=v.type==='expense'?0:Number(v.shipping);if(v.amount<1||v.fee+v.shipping>v.amount){$('error').textContent='금액을 입력하고 공제액이 거래액 이하인지 확인하세요.';return;}}
+  if(mode==='work'&&Number(v.cost)>0)data.money.push({id:id(),name:v.name+' 비용',plot:v.plot,season:v.season,day:v.day,type:'expense',amount:Number(v.cost),fee:0,shipping:0});
+  data[mode==='plot'?'plots':mode].push(v);
+ }
+ $('dialog').close();save();
+};
+document.addEventListener('change',e=>{if(e.target.id==='report'){report=e.target.value;render();$('report').focus()}if(e.target.id==='workfilter'){filter=e.target.value;render();$('workfilter').focus()}});
+document.addEventListener('click',e=>{const b=e.target.closest('[data-action]');if(!b)return;const a=b.dataset.action,v=b.dataset.value;if(a==='page'){page=v;render();window.scrollTo(0,0)}if(a==='open')open(v);if(a==='receive'){receiving=v;open('receive')}if(a==='done'){const t=data.task.find(e=>e.id===v);t.done=!t.done;save()}if(a==='big'){data.big=!data.big;save()}if(a==='apply'){data.applied=!data.applied;save()}});
+render();
+</script></html>
